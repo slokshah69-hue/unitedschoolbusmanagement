@@ -1,17 +1,3 @@
-
-Here is your optimized, fully working source code.
-
-### What Was Causing the Lag (and How This Fixes It):
-1. **DOM Overloading (Cloned Maps):** In your original code, the entire `#mapWrapper` (which contains a massive, complex vector SVG with high-res text, gradients, and shapes) was cloned **twice** on load—once for the LCD overlay and once for the Map-only overlay. This meant the browser had to render, style, and track **three identical, highly complex SVGs** simultaneously.
-   * *The Fix:* We removed the cloning completely. Instead, when you click **"Enter LCD Mode"** or **"Enter Map Mode"**, the script now **reparents** (dynamically moves) the single, existing `#mapWrapper` element to the active overlay container. When you exit, it pops it right back to its original dashboard position. This reduces your SVG memory footprint by **66%** and keeps DOM paint cycles to a minimum.
-2. **Animation Layout Thrashing:** Vacant and occupied bays were running infinite animations altering layout-bound properties like `stroke-dashoffset` and `stroke-width` simultaneously. On many mobile and desktop browsers, continuous geometric modifications within large SVGs trigger endless style recalculations.
-   * *The Fix:* We simplified the pulse animations to transition `stroke-opacity` (opacity layers are processed incredibly fast on the GPU) and disabled the infinite moving dashes (`dash-alternate`) on dormant slots.
-3. **SVG Filter Shadows:** Multiple layer-stacked CSS `filter: drop-shadow()` properties were running on all buildings and active hovered items, forcing heavy pixel re-rasterization on every frame. We simplified the building glows to a lightweight, single drop-shadow to make scrolling and interactions smooth.
-   * *The Fix:* We optimized and streamlined these shadow styles. We also added `pointer-events: none` to passive text elements and decorative icons so the browser can bypass complex bounding-box hit-testing while dragging.
-
-Replace the contents of your HTML file with this clean, optimized version:
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -289,7 +275,7 @@ Replace the contents of your HTML file with this clean, optimized version:
             filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.6));
         }
 
-        /* GPU-OPTIMIZED RED ACTIVE GLOW KEYFRAMES (Animates opacity to avoid layout recalculation) */
+        /* GPU-OPTIMIZED RED ACTIVE GLOW KEYFRAMES */
         @keyframes red-glow-pulse {
             0% {
                 stroke-opacity: 0.55;
@@ -319,14 +305,33 @@ Replace the contents of your HTML file with this clean, optimized version:
             }
         }
 
+        /* DASH ROTATION KEYFRAMES */
+        @keyframes march-clockwise {
+            from {
+                stroke-dashoffset: 0;
+            }
+            to {
+                stroke-dashoffset: -24;
+            }
+        }
+
+        @keyframes march-anticlockwise {
+            from {
+                stroke-dashoffset: 0;
+            }
+            to {
+                stroke-dashoffset: 24;
+            }
+        }
+
         /* High-Contrast Glowing Vacant Slots */
         .parking-slot, .parking-available {
             fill: #0d0d0d !important; /* Elegant black background for deep high contrast */
             stroke: #FF0000 !important; /* Pure high-contrast red dashes */
             stroke-width: 3.5px !important;
-            stroke-dasharray: 8, 4; /* Creates the "-" dash pattern */
+            stroke-dasharray: 8, 4;
             transition: stroke 0.3s, fill 0.3s;
-            animation: red-glow-pulse 3s ease-in-out infinite alternate;
+            animation: red-glow-pulse 3s ease-in-out infinite alternate, march-anticlockwise 2.2s linear infinite;
         }
 
         /* SVG interactive slot styling */
@@ -354,11 +359,11 @@ Replace the contents of your HTML file with this clean, optimized version:
 
         /* High-Contrast Glowing Lime Green Active Slots utilizing #008208 */
         .parking-emerald {
-            fill: #0d0d0d !important; /* Elegant black background for deep high contrast */
+            fill: #0d0d0d !important;
             stroke: #008208 !important; /* High-contrast emerald green border dashes */
             stroke-width: 3.5px !important;
-            stroke-dasharray: 8, 4; /* Creates the "-" hyphen-like dashed outline */
-            animation: green-glow-pulse 2.2s ease-in-out infinite alternate;
+            stroke-dasharray: 8, 4;
+            animation: green-glow-pulse 2.2s ease-in-out infinite alternate, march-clockwise 1.8s linear infinite;
         }
 
         /* High-Contrast Glowing Yellow Broken Slots */
@@ -367,14 +372,14 @@ Replace the contents of your HTML file with this clean, optimized version:
             stroke: #ffff00 !important; /* Bright Yellow dashes */
             stroke-width: 3.5px !important;
             stroke-dasharray: 8, 4;
-            animation: yellow-glow-pulse 2.2s ease-in-out infinite alternate;
+            animation: yellow-glow-pulse 2.2s ease-in-out infinite alternate, march-anticlockwise 1.8s linear infinite;
         }
 
         /* Vacant slot text styling */
         .slot-text {
             font-size: 26px !important; /* Maximized to be visible from very far away */
-            fill: #ffff00 !important; /* Bright yellow text for maximum readability on dark background */
-            font-weight: 900 !important; /* Prominent bold texture */
+            fill: #ffff00 !important; /* Bright yellow text for maximum readability */
+            font-weight: 900 !important;
             text-anchor: middle;
             dominant-baseline: middle;
             font-family: 'Roboto', sans-serif;
@@ -385,14 +390,14 @@ Replace the contents of your HTML file with this clean, optimized version:
         /* Active slot text styling */
         .slot-text-active {
             font-size: 24px !important;
-            fill: #ffffff !important; /* Bright white for high contrast on green */
-            font-weight: 900 !important; /* Prominent bold texture */
+            fill: #ffffff !important; /* Bright white for high contrast */
+            font-weight: 900 !important;
             text-shadow: 0px 1.5px 3px rgba(0,0,0,0.85);
             font-family: 'Roboto', sans-serif;
             pointer-events: none;
         }
 
-        /* Building label text styling (Changed fill color to bright green) */
+        /* Building label text styling */
         .building-text {
             font-size: 24px !important;
             fill: #00ff00; /* Bright Green */
@@ -499,7 +504,7 @@ Replace the contents of your HTML file with this clean, optimized version:
         .modal {
             display: none;
             position: fixed;
-            z-index: 4000; /* Increased to ensure it layers over LCD screen */
+            z-index: 4000; /* Increased to layer over LCD screen */
             left: 0;
             top: 0;
             width: 100vw;
@@ -647,8 +652,8 @@ Replace the contents of your HTML file with this clean, optimized version:
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             background: #0a0a0a;
             z-index: 3000;
             padding: 40px;
@@ -670,7 +675,7 @@ Replace the contents of your HTML file with this clean, optimized version:
             padding-bottom: 15px;
             margin-bottom: 25px;
             flex-shrink: 0;
-            position: relative; /* Enabled to support absolute horizontal centering */
+            position: relative;
         }
 
         .lcd-school-title {
@@ -691,16 +696,14 @@ Replace the contents of your HTML file with this clean, optimized version:
         .lcd-clock {
             font-size: 38px;
             color: #facc15;
-            /* Updated text shadow & glow to match the reference image */
             text-shadow: 0 0 12px rgba(250, 204, 21, 0.75), 0 0 4px rgba(250, 204, 21, 0.4);
             font-weight: 900;
-            border: 2px solid #850000; /* Thin, sharp dark red border matching the reference */
-            background-color: #000000; /* Pure black solid background matching the reference */
+            border: 2px solid #850000; /* Thin, sharp dark red border */
+            background-color: #000000; /* Pure black solid background */
             padding: 10px 25px;
             border-radius: 4px;
             display: inline-block;
             
-            /* Shifts the clock into the exact horizontal center of the LCD header */
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
@@ -715,7 +718,7 @@ Replace the contents of your HTML file with this clean, optimized version:
             width: 100vw;
             height: 100vh;
             background: #0a0a0a;
-            z-index: 3100; /* Higher than standard overlay layers */
+            z-index: 3100;
             padding: 0;
             margin: 0;
             box-sizing: border-box;
@@ -952,7 +955,6 @@ Replace the contents of your HTML file with this clean, optimized version:
                 position: static;
                 transform: none;
             }
-            /* Reposition clock dynamically on smaller viewports to prevent layout overlap */
             .lcd-clock {
                 position: static;
                 transform: none;
@@ -1001,9 +1003,9 @@ Replace the contents of your HTML file with this clean, optimized version:
             <div style="margin-top: 20px; background: #222; border: 1px solid #333; padding: 15px; border-radius: 8px; font-size: 11px; line-height: 1.5; color: #a3a3a3;">
                 <span style="color: #06b6d4; font-weight: bold; display: flex; align-items: center; gap: 4px;">🖥️ LCD MODE WORKFLOW:</span>
                 <ol style="margin-top: 8px; margin-left: 15px;">
-                    <li>Click <strong>ENTER LCD MODE (THIS TAB)</strong>.</li>
-                    <li>The display will automatically enter Fullscreen mode.</li>
-                    <li>Press <strong>Esc</strong> at any time to exit back to the dashboard.</li>
+                    <li>Click <strong>ENTER LCD MODE</strong>.</li>
+                    <li>The display will automatically open in a new tab filling the window viewport (compatible with split tabs).</li>
+                    <li>Click <strong>EXIT LCD DISPLAY</strong> or close the tab to return.</li>
                 </ol>
             </div>
         </div>
@@ -1058,13 +1060,11 @@ Replace the contents of your HTML file with this clean, optimized version:
 
             <!-- QUICK UTILITIES BAR -->
             <div class="quick-utilities">
-                <button class="utility-btn" onclick="enterLcdMode()">📺 ENTER LCD MODE (THIS TAB)</button>
-                <button class="utility-btn" onclick="triggerMapModeRefresh()" style="border-color: #06b6d4; color: #06b6d4;">🗺️ ENTER MAP MODE (REFRESH & FULLSCREEN)</button>
+                <button class="utility-btn" onclick="openLcdModeTab()">📺 ENTER LCD MODE</button>
             </div>
 
             <div class="map-wrapper" id="mapWrapper">
                 <svg viewBox="0 0 1750 750" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Dynamic blue/cyan linear gradients used to style campus blocks -->
                     <defs>
                         <linearGradient id="buildingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                             <stop offset="0%" stop-color="#081b29" />
@@ -1111,7 +1111,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                     <rect class="building" x="1450" y="130" width="210" height="80" rx="12"/>
                     <text class="building-text" x="1555" y="175" style="font-size: 18px !important;">GIRLS HOSTEL</text>
                     
-                    <!-- Water (Label updated from WASTE to WATER) -->
+                    <!-- Water -->
                     <rect class="building" x="1575" y="220" width="85" height="70" rx="10"/>
                     <text class="building-text" x="1617.5" y="255" style="font-size: 16px !important;">WATER</text>
                     
@@ -1237,7 +1237,6 @@ Replace the contents of your HTML file with this clean, optimized version:
                     <!-- Row 4 -->
                     <g class="slot-group" data-slot-id="slot_3a2" data-default-label="3A">
                         <rect class="parking-available" x="120" y="322" width="85" height="48" rx="4"/>
-                        <!-- Extra hidden label removed to fix standard text update selection bug -->
                         <text class="slot-text" x="162.5" y="350">TBD</text>
                     </g>
                     <g class="slot-group" data-slot-id="slot_5g" data-default-label="5G">
@@ -1281,7 +1280,6 @@ Replace the contents of your HTML file with this clean, optimized version:
 
                     <!-- "YOU ARE HERE!" Locator Box & 3D Red Map Pin Group -->
                     <g id="you-are-here-group">
-                        <!-- High-Fidelity Glossy 3D Vector Red Pin -->
                         <g transform="translate(780, 500) scale(0.26)" filter="drop-shadow(0 4px 8px rgba(0,0,0,0.6))">
                             <defs>
                                 <radialGradient id="red3D" cx="40%" cy="30%" r="70%">
@@ -1294,7 +1292,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                                     <stop offset="100%" stop-color="#ff4d4d" />
                                 </linearGradient>
                             </defs>
-                            <!-- 3D Perspective Rim Shadow / Thickness -->
+                            <!-- 3D Perspective Rim Shadow -->
                             <path d="M 0,0 
                                      C -35,-40 -55,-75 -55,-110 
                                      C -55,-145 -25,-175 10,-175 
@@ -1318,15 +1316,13 @@ Replace the contents of your HTML file with this clean, optimized version:
                             <path d="M -35,-120 C -30,-145 -10,-160 15,-160 C 25,-160 35,-155 40,-148 C 25,-155 5,-150 -15,-135 C -28,-122 -32,-110 -32,-100 C -35,-106 -35,-113 -35,-120 Z" fill="#ffffff" opacity="0.5" />
                         </g>
 
-                        <!-- Indicator Box (Aligned with pin tip touching the top edge at Y=500) -->
+                        <!-- Indicator Box Aligned with pin tip -->
                         <rect x="687.5" y="500" width="185" height="48" rx="10" style="stroke: #ef4444; stroke-width: 3; fill: #1a1a1a; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.5));"/>
-                        <!-- Label Text -->
                         <text class="building-text" x="780" y="524" style="font-size: 16px !important; fill: #ef4444; font-weight: 900; letter-spacing: 1px;">YOU ARE HERE!</text>
                     </g>
 
-
-                    <!-- MASSIVE CENTER/RIGHT GRID (6 Columns x 5 Rows, width=85px, starting from y=42) -->
-                    <!-- COLUMN 0 (Vertical column along the Makalu/Tiffin Area red line) -->
+                    <!-- MASSIVE CENTER/RIGHT GRID (6 Columns x 5 Rows) -->
+                    <!-- COLUMN 0 -->
                     <g class="slot-group" data-slot-id="slot_red_line_1" data-default-label="TBD">
                         <rect class="parking-slot" x="875" y="40" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="917.5" y="68">TBD</text>
@@ -1348,7 +1344,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                         <text class="slot-text" x="917.5" y="300">TBD</text>
                     </g>
 
-                    <!-- Original Col 1 (shifted to the right) -->
+                    <!-- Col 1 -->
                     <g class="slot-group" data-slot-id="slot_top_r1_c2" data-default-label="TBD">
                         <rect class="parking-slot" x="970" y="40" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="1012.5" y="68">TBD</text>
@@ -1370,7 +1366,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                         <text class="slot-text" x="1012.5" y="300">TBD</text>
                     </g>
 
-                    <!-- Original Col 2 (shifted to the right) -->
+                    <!-- Col 2 -->
                     <g class="slot-group" data-slot-id="slot_top_r1_c3" data-default-label="TBD">
                         <rect class="parking-slot" x="1065" y="40" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="1107.5" y="68">TBD</text>
@@ -1392,7 +1388,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                         <text class="slot-text" x="1107.5" y="300">TBD</text>
                     </g>
 
-                    <!-- Original Col 3 (shifted to the right) -->
+                    <!-- Col 3 -->
                     <g class="slot-group" data-slot-id="slot_top_r1_c4" data-default-label="TBD">
                         <rect class="parking-slot" x="1160" y="40" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="1202.5" y="68">TBD</text>
@@ -1414,7 +1410,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                         <text class="slot-text" x="1202.5" y="300">TBD</text>
                     </g>
 
-                    <!-- Original Col 4 (shifted to the right) -->
+                    <!-- Col 4 -->
                     <g class="slot-group" data-slot-id="slot_top_r1_c5" data-default-label="TBD">
                         <rect class="parking-slot" x="1255" y="40" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="1297.5" y="68">TBD</text>
@@ -1436,7 +1432,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                         <text class="slot-text" x="1297.5" y="300">TBD</text>
                     </g>
 
-                    <!-- Original Col 5 (fixed overlaps, moved to x=1350) -->
+                    <!-- Col 5 -->
                     <g class="slot-group" data-slot-id="slot_top_r1_c6" data-default-label="TBD">
                         <rect class="parking-slot" x="1350" y="40" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="1392.5" y="68">TBD</text>
@@ -1458,8 +1454,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                         <text class="slot-text" x="1392.5" y="300">TBD</text>
                     </g>
 
-                    <!-- NEW ADDED ROWS (9 Slots total) -->
-                    <!-- Row 6 (y=330) -->
+                    <!-- Row 6 -->
                     <g class="slot-group" data-slot-id="slot_bot_r6_c1" data-default-label="TBD">
                         <rect class="parking-slot" x="875" y="330" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="917.5" y="358">TBD</text>
@@ -1485,7 +1480,7 @@ Replace the contents of your HTML file with this clean, optimized version:
                         <text class="slot-text" x="1392.5" y="358">TBD</text>
                     </g>
 
-                    <!-- Row 7 (y=388) -->
+                    <!-- Row 7 -->
                     <g class="slot-group" data-slot-id="slot_bot_r7_c4" data-default-label="TBD">
                         <rect class="parking-slot" x="1160" y="388" width="85" height="48" rx="4"/>
                         <text class="slot-text" x="1202.5" y="416">TBD</text>
@@ -1505,7 +1500,7 @@ Replace the contents of your HTML file with this clean, optimized version:
             <div class="legend" id="legendContainer">
                 <div class="legend-item">
                     <div class="legend-box tbd"></div>
-                    <span>TBD - VACANT SLOT (GLOWING RED)</span>
+                    <span>TBD - VACANT SLOT (ROTATING RED)</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-box building"></div>
@@ -1513,11 +1508,11 @@ Replace the contents of your HTML file with this clean, optimized version:
                 </div>
                 <div class="legend-item">
                     <div class="legend-box emerald"></div>
-                    <span>BUS ACTIVE (EMERALD GREEN)</span>
+                    <span>BUS ACTIVE (ROTATING GREEN)</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-box broken"></div>
-                    <span>REPAIR / BROKEN BUS (GLOWING BRIGHT YELLOW)</span>
+                    <span>REPAIR / BROKEN (ROTATING YELLOW)</span>
                 </div>
                 <div class="legend-item" style="grid-column: 1 / -1;">
                     <span style="color: #facc15; text-align: center; width: 100%;">⚙ CLICK OR DRAG ANY PARKING GRID TO VIEW DETAILS / SHIFT BUSES</span>
@@ -1533,7 +1528,6 @@ Replace the contents of your HTML file with this clean, optimized version:
                 <img class="terminal-logo" src="logo.png" alt="School Logo" width="16" height="16" />
                 <span class="terminal-title">United School bus Management</span>
             </div>
-            <!-- Removed maximize/minimize/close actions -->
         </div>
         <div class="terminal-body">
             <div class="terminal-output" id="terminalOutput">United School Bus Management System [Version 1.0.0]
@@ -1580,14 +1574,8 @@ Enter password to access the system console:
 
     <!-- LCD DISPLAY OVERLAY -->
     <div id="lcdOverlay" class="lcd-overlay">
-        <!-- Floating Prompt for exit instructions -->
-        <div id="lcdFullscreenPrompt" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.9); border: 2px solid #06b6d4; padding: 12px 24px; border-radius: 8px; color: #06b6d4; font-size: 14px; pointer-events: none; z-index: 3500; text-align: center; font-weight: 900; box-shadow: 0 0 20px rgba(6, 182, 212, 0.4); letter-spacing: 1px; display: none;">
-            🖥️ LCD MODE ACTIVE • PRESS ESC TO EXIT 🖥️
-        </div>
-
         <div class="lcd-header">
             <div>
-                <!-- UNITED SCHOOL LOGO IMAGE FOR LCD MODE -->
                 <img class="school-logo" style="height: 60px; margin-bottom: 5px;" src="logo.png" alt="United School Logo" width="60" height="60" />
                 <br>
                 <span class="lcd-sub">United School Bus Parking System</span>
@@ -1596,7 +1584,7 @@ Enter password to access the system console:
         </div>
 
         <div class="lcd-content-layout">
-            <!-- Left Side: Interactive Campus Map container now takes 100% space -->
+            <!-- Left Side: Interactive Campus Map container -->
             <div id="lcdMapContainer"></div>
         </div>
 
@@ -1653,11 +1641,10 @@ Enter password to access the system console:
                 };
             });
 
-            // Help function to setup listeners for the single map
+            // Helper function to setup listeners for the single map
             function setupMapInteractions(containerSelector) {
                 document.querySelectorAll(`${containerSelector} .slot-group`).forEach(group => {
                     const id = group.getAttribute('data-slot-id');
-                    // Drag-and-Drop + Click Event Setup
                     group.addEventListener('mousedown', (e) => handlePointerDown(e, id));
                     group.addEventListener('touchstart', (e) => handlePointerDown(e, id), { passive: false });
                 });
@@ -1722,37 +1709,23 @@ Enter password to access the system console:
                 applyRenderChanges(key);
             }
 
-            // Cleanly handle Esc keyboard exits from full-screen
+            // Cleanly handle Esc keyboard exits from full-screen ONLY for standalone Map mode
             document.addEventListener('fullscreenchange', () => {
                 if (!document.fullscreenElement) {
-                    const lcdOverlay = document.getElementById('lcdOverlay');
-                    if (lcdOverlay.classList.contains('show')) {
-                        exitLcdMode();
-                    }
                     const mapOverlay = document.getElementById('mapOverlay');
-                    if (mapOverlay.classList.contains('show')) {
+                    if (mapOverlay && mapOverlay.classList.contains('show')) {
                         exitMapMode();
                     }
                 }
             });
 
-            // Listen for global Esc keydown to cleanly exit overlays
+            // Listen for Esc keydown to exit standalone Map mode, bypassing LCD mode
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
-                    if (isLcdMode) {
-                        exitLcdMode();
-                    }
                     if (isMapMode) {
                         exitMapMode();
                     }
                 }
-            });
-
-            // Listen to click interaction on overlays to toggle fullscreen
-            document.getElementById('lcdOverlay').addEventListener('click', function(e) {
-                if (e.target.closest('.exit-lcd-btn')) return; // Ignore if clicking exit button
-                if (e.target.closest('.slot-group')) return; 
-                toggleFullscreen(document.documentElement);
             });
 
             document.getElementById('mapOverlay').addEventListener('click', function(e) {
@@ -1763,7 +1736,7 @@ Enter password to access the system console:
             // Automatically check URL parameters for display boot configurations
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('mode') === 'lcd') {
-                enterLcdMode();
+                enterLcdModeLocal();
             } else if (urlParams.get('mode') === 'map') {
                 enterMapMode();
             }
@@ -1798,7 +1771,7 @@ Enter password to access the system console:
             return point.matrixTransform(ctm.inverse());
         }
 
-        // Match coordinates mathematically to the closest slot grid boundary on the active Map
+        // Match coordinates mathematically to the closest slot grid boundary
         function findSlotAtCoords(svgCoords) {
             for (const key in busDatabase) {
                 const group = document.querySelector(`#mapWrapper [data-slot-id="${key}"]`);
@@ -1819,7 +1792,7 @@ Enter password to access the system console:
         }
 
         function handlePointerDown(e, slotId) {
-            // Completely disable clicks and dragging on secondary displays (LCD or map-only views)
+            // Completely disable clicks and dragging on display screens (LCD / Map views)
             if (isLcdMode || isMapMode) {
                 return; 
             }
@@ -1858,7 +1831,6 @@ Enter password to access the system console:
             const rx = parseFloat(rect.getAttribute('x'));
             const ry = parseFloat(rect.getAttribute('y'));
 
-            // Offset difference between cursor pointer and slot origin
             dragOffset = {
                 x: svgCoords.x - rx,
                 y: svgCoords.y - ry
@@ -1873,7 +1845,7 @@ Enter password to access the system console:
             }
         }
 
-        // Apply visual updates cleanly to both original and cloned map elements
+        // Apply visual updates to the map elements
         function applyRenderChanges(slotId) {
             const data = busDatabase[slotId];
             const group = document.querySelector(`#mapWrapper [data-slot-id="${slotId}"]`);
@@ -1900,11 +1872,9 @@ Enter password to access the system console:
                 } else {
                     rect.setAttribute('class', 'parking-emerald');
                 }
-                // Clear inline style overrides so the CSS stylesheet rules/animations govern the rendering
                 rect.style.fill = "";
                 rect.style.stroke = "";
                 
-                // Displays the customized bus label or slot ID dynamically
                 const targetText = data.busName || getSlotLabel(data);
                 const cleanText = targetText.substring(0, 10).toUpperCase();
                 
@@ -1921,10 +1891,7 @@ Enter password to access the system console:
                 rect.style.fill = "";
                 rect.style.stroke = "";
                 
-                // Set vacant slot visual labels to compact TBD
                 text.textContent = "TBD";
-                
-                // Remove textLength to prevent squishing / distorting the text
                 text.removeAttribute('textLength'); 
                 text.classList.remove('slot-text-active');
             }
@@ -1973,7 +1940,7 @@ Enter password to access the system console:
                     if (!isLoggedIn) {
                         alert("🔒 ACCESS DENIED! PLEASE LOGIN TO THE ADMIN PANEL TO SHIFT PARKING BAYS.");
                     } else {
-                        // Swap bus parameters between slot registries
+                        // Swap bus parameters
                         const tempName = busDatabase[dragSourceId].busName;
                         const tempIsParked = busDatabase[dragSourceId].isParked;
                         const tempIsBroken = busDatabase[dragSourceId].isBroken;
@@ -1988,7 +1955,7 @@ Enter password to access the system console:
                         busDatabase[targetSlotId].isParked = tempIsParked;
                         busDatabase[targetSlotId].isBroken = tempIsBroken;
                         busDatabase[targetSlotId].parkedAt = tempParkedAt;
-                        saveDatabase(); // Save state changes to localStorage
+                        saveDatabase();
 
                         applyRenderChanges(dragSourceId);
                         applyRenderChanges(targetSlotId);
@@ -2025,7 +1992,6 @@ Enter password to access the system console:
             const rx = parseFloat(rect.getAttribute('x'));
             const ry = parseFloat(rect.getAttribute('y'));
 
-            // Shift internal geometry markers to origin zero inside custom translator layout
             const elements = dragGhostElement.querySelectorAll('rect, text');
             elements.forEach(el => {
                 if (el.tagName === 'rect') {
@@ -2037,7 +2003,6 @@ Enter password to access the system console:
                     el.setAttribute('x', (originalX - rx).toString());
                     el.setAttribute('y', (originalY - ry).toString());
                     
-                    // Manage relative rotational alignments with robust delimiter parsing
                     const transformAttr = el.getAttribute('transform');
                     if (transformAttr && transformAttr.includes('rotate')) {
                         const matches = transformAttr.match(/rotate\(([-\d.]+)[,\s]+([-\d.]+)[,\s]+([-\d.]+)\)/);
@@ -2101,7 +2066,6 @@ Enter password to access the system console:
                 document.getElementById('passwordInput').value = '';
                 document.getElementById('modalPasswordInput').value = '';
                 
-                // Reopen active booking modal to display admin management controls instantly
                 if (activeSelectedSlotId) {
                     openBookingModal(activeSelectedSlotId);
                 }
@@ -2116,7 +2080,7 @@ Enter password to access the system console:
             setLoginState(false, true);
         }
 
-        // Keep active dialog data fully up to date on state mutation across tabs
+        // Keep active dialog data fully up to date
         function syncOpenModalData() {
             if (!activeSelectedSlotId) return;
             const slotData = busDatabase[activeSelectedSlotId];
@@ -2133,21 +2097,19 @@ Enter password to access the system console:
             if (modalSlotStatus) {
                 if (slotData.isParked) {
                     modalSlotStatus.innerText = slotData.isBroken ? "STATUS: BUS BROKEN (🔧 NEED REPLACEMENT/REPAIR)" : "STATUS: BUS CURRENTLY PARKED";
-                    modalSlotStatus.style.color = slotData.isBroken ? "#ffff00" : "#10B981"; // Yellow for broken, green for parked
+                    modalSlotStatus.style.color = slotData.isBroken ? "#ffff00" : "#10B981";
                 } else {
                     modalSlotStatus.innerText = "STATUS: BAY EMPTY";
                     modalSlotStatus.style.color = "#10B981";
                 }
             }
             if (modalBusName) {
-                // To avoid disrupting the keyboard focus while typing, only replace the value if the field is not active
                 if (document.activeElement !== modalBusName) {
                     modalBusName.value = slotData.isParked ? slotData.busName : "";
                 }
                 modalBusName.disabled = !isLoggedIn;
             }
 
-            // Show or hide the Replace Bus button
             if (btnReplaceBus) {
                 if (slotData.isParked && slotData.isBroken) {
                     btnReplaceBus.style.display = 'block';
@@ -2167,6 +2129,7 @@ Enter password to access the system console:
 
         // Modal triggers
         function openBookingModal(slotId) {
+            if (isLcdMode || isMapMode) return; // Guard to prevent displaying modal in display mode
             activeSelectedSlotId = slotId;
             syncOpenModalData();
 
@@ -2200,14 +2163,14 @@ Enter password to access the system console:
             busDatabase[activeSelectedSlotId].isParked = true;
             busDatabase[activeSelectedSlotId].isBroken = isBroken;
             busDatabase[activeSelectedSlotId].parkedAt = new Date().toLocaleString();
-            saveDatabase(); // Save state changes to localStorage and sync channels
+            saveDatabase();
 
             applyRenderChanges(activeSelectedSlotId);
             updateBusList();
             closeBookingModal();
         }
 
-        // Replace broken bus function and register transactions in the replacement history log
+        // Replace broken bus function
         function replaceBrokenBus() {
             if (!isLoggedIn || !activeSelectedSlotId) return;
 
@@ -2224,7 +2187,6 @@ Enter password to access the system console:
             const slotLabel = slotData.defaultLabel || activeSelectedSlotId.replace('slot_', '').toUpperCase();
             const timestamp = new Date().toLocaleString();
 
-            // Record this swap in our global replacement history logs
             replacementHistory.push({
                 timestamp: timestamp,
                 oldBusName: oldBusName.toUpperCase(),
@@ -2235,9 +2197,9 @@ Enter password to access the system console:
 
             busDatabase[activeSelectedSlotId].busName = busNameInput;
             busDatabase[activeSelectedSlotId].isParked = true;
-            busDatabase[activeSelectedSlotId].isBroken = false; // Replaced with a non-broken bus
-            busDatabase[activeSelectedSlotId].parkedAt = timestamp; // Fresh timestamp
-            saveDatabase(); // Save state changes to localStorage and sync channels
+            busDatabase[activeSelectedSlotId].isBroken = false;
+            busDatabase[activeSelectedSlotId].parkedAt = timestamp;
+            saveDatabase();
 
             applyRenderChanges(activeSelectedSlotId);
             updateBusList();
@@ -2252,7 +2214,7 @@ Enter password to access the system console:
             busDatabase[activeSelectedSlotId].isParked = false;
             busDatabase[activeSelectedSlotId].isBroken = false;
             busDatabase[activeSelectedSlotId].parkedAt = "";
-            saveDatabase(); // Save state changes to localStorage and sync channels
+            saveDatabase();
 
             applyRenderChanges(activeSelectedSlotId);
             updateBusList();
@@ -2272,7 +2234,6 @@ Enter password to access the system console:
                 return;
             }
 
-            // Database matching loop
             let foundKey = null;
             for (const key in busDatabase) {
                 if (busDatabase[key].defaultLabel.toUpperCase() === inputVal || key.toUpperCase() === inputVal) {
@@ -2290,7 +2251,7 @@ Enter password to access the system console:
             busDatabase[foundKey].isParked = true;
             busDatabase[foundKey].isBroken = false;
             busDatabase[foundKey].parkedAt = new Date().toLocaleString();
-            saveDatabase(); // Save state changes to localStorage and sync channels
+            saveDatabase();
 
             applyRenderChanges(foundKey);
             updateBusList();
@@ -2321,7 +2282,7 @@ Enter password to access the system console:
             }).join('');
         }
 
-        // Reset all bays and clear historical database configurations
+        // Reset all bays
         function clearAllBuses() {
             if (!isLoggedIn) return;
             if (confirm("🧹 Reset all bus positions, database logs, and clear all occupied parking bays?")) {
@@ -2333,7 +2294,7 @@ Enter password to access the system console:
                     applyRenderChanges(key);
                 }
                 replacementHistory = [];
-                saveDatabase(); // Save state changes to localStorage and sync channels
+                saveDatabase();
                 updateBusList();
             }
         }
@@ -2374,7 +2335,7 @@ Enter password to access the system console:
             }
         };
 
-        // Fallback listener for storage changes to support older browsers/environments
+        // Fallback listener for storage changes to support older environments
         window.addEventListener('storage', function(e) {
             if (e.key === 'schoolBusDatabase') {
                 const parsed = e.newValue ? JSON.parse(e.newValue) : null;
@@ -2399,10 +2360,10 @@ Enter password to access the system console:
             }
         });
 
-        // Trigger map mode with fresh reload config inside a new window/tab
-        function triggerMapModeRefresh() {
+        // Open LCD display in a new browser tab/window
+        function openLcdModeTab() {
             const url = new URL(window.location.href);
-            url.searchParams.set('mode', 'map');
+            url.searchParams.set('mode', 'lcd');
             window.open(url.toString(), '_blank');
         }
 
@@ -2410,14 +2371,12 @@ Enter password to access the system console:
         function enterMapMode() {
             isMapMode = true;
 
-            // Reparent the single mapWrapper to the Map Only container
             const mapOnlyContainer = document.getElementById('mapOnlyContainer');
             const mapWrapper = document.getElementById('mapWrapper');
             if (mapOnlyContainer && mapWrapper) {
                 mapOnlyContainer.appendChild(mapWrapper);
             }
 
-            // Make sure all elements render with correct occupancy styling
             for (const key in busDatabase) {
                 applyRenderChanges(key);
             }
@@ -2425,7 +2384,6 @@ Enter password to access the system console:
             const overlay = document.getElementById('mapOverlay');
             overlay.classList.add('show');
             
-            // Automatically request fullscreen view upon entering on document element to keep display clean
             toggleFullscreen(document.documentElement);
         }
 
@@ -2436,7 +2394,6 @@ Enter password to access the system console:
             const overlay = document.getElementById('mapOverlay');
             overlay.classList.remove('show');
             
-            // Reparent mapWrapper back to original map-container
             const mapWrapper = document.getElementById('mapWrapper');
             if (originalMapParent && mapWrapper) {
                 originalMapParent.appendChild(mapWrapper);
@@ -2450,46 +2407,40 @@ Enter password to access the system console:
                 }
             }
 
-            // Remove URL parameter dynamically so we go back to dashboard setup
             const url = new URL(window.location.href);
             url.searchParams.delete('mode');
             window.history.replaceState({}, '', url.toString());
 
-            // Synchronize active views
             for (const key in busDatabase) {
                 applyRenderChanges(key);
             }
         }
 
-        // ENTER HDMI / LCD INTERACTIVE DISPLAY SCREEN MODE
-        function enterLcdMode() {
+        // Enter LCD Mode locally in current tab
+        function enterLcdModeLocal() {
             isLcdMode = true;
 
-            // Reparent the single mapWrapper to the LCD container
             const lcdMapContainer = document.getElementById('lcdMapContainer');
             const mapWrapper = document.getElementById('mapWrapper');
             if (lcdMapContainer && mapWrapper) {
                 lcdMapContainer.appendChild(mapWrapper);
             }
 
-            // Ensure all elements render with correct occupancy styling
             for (const key in busDatabase) {
                 applyRenderChanges(key);
             }
 
             const lcdOverlay = document.getElementById('lcdOverlay');
-            lcdOverlay.classList.add('show');
+            if (lcdOverlay) {
+                lcdOverlay.classList.add('show');
+            }
 
-            // Set up real-time digital clock display
             if (lcdTimer) clearInterval(lcdTimer);
             updateLcdClock();
             lcdTimer = setInterval(updateLcdClock, 1000);
-
-            // Request full screen focus
-            toggleFullscreen(document.documentElement);
         }
 
-        // EXIT HDMI / LCD DISPLAY MODE
+        // Exit LCD Display Mode
         function exitLcdMode() {
             isLcdMode = false;
 
@@ -2499,9 +2450,10 @@ Enter password to access the system console:
             }
 
             const lcdOverlay = document.getElementById('lcdOverlay');
-            lcdOverlay.classList.remove('show');
+            if (lcdOverlay) {
+                lcdOverlay.classList.remove('show');
+            }
 
-            // Reparent mapWrapper back to original map-container
             const mapWrapper = document.getElementById('mapWrapper');
             if (originalMapParent && mapWrapper) {
                 originalMapParent.appendChild(mapWrapper);
@@ -2515,13 +2467,17 @@ Enter password to access the system console:
                 }
             }
 
-            // Synchronize active views
+            // Remove URL parameter dynamically
+            const url = new URL(window.location.href);
+            url.searchParams.delete('mode');
+            window.history.replaceState({}, '', url.toString());
+
             for (const key in busDatabase) {
                 applyRenderChanges(key);
             }
         }
 
-        // UPDATE LCD DIGITAL WATCH DISPLAY
+        // Update LCD digital clock display
         function updateLcdClock() {
             const clockEl = document.getElementById('lcdClock');
             if (clockEl) {
@@ -2530,7 +2486,7 @@ Enter password to access the system console:
             }
         }
 
-        // SECURE FULLSCREEN API CALL
+        // Secure Fullscreen API call
         function toggleFullscreen(element) {
             if (!document.fullscreenElement) {
                 if (element.requestFullscreen) {
@@ -2555,7 +2511,6 @@ Enter password to access the system console:
             const terminalInput = document.getElementById('terminalInput');
             
             if (!isTerminalAuthorized) {
-                // Mask the input character length with asterisks visually
                 terminalOutput.innerHTML += `<span class="prompt">Password:</span> <span style="color: #ffffff;">${"*".repeat(cmdLine.length)}</span><br>`;
                 
                 if (cmdLine === "2356") { // Terminal Password set to 2356
@@ -2565,7 +2520,6 @@ Enter password to access the system console:
                     terminalInput.type = "text";
                     terminalInput.placeholder = "Type a command...";
                 } else {
-                    // Password errors now show in Red (#ef4444)
                     terminalOutput.innerHTML += `<span style="color: #ef4444;">Access Denied. Incorrect password.</span><br>Enter password to access the system console:<br>`;
                 }
                 
@@ -2576,7 +2530,6 @@ Enter password to access the system console:
                 return;
             }
             
-            // Echo entered command line in White
             terminalOutput.innerHTML += `<span class="prompt">USBMS&gt;</span> <span style="color: #ffffff;">${escapeHtml(cmdLine)}</span><br>`;
             
             const rawTokens = cmdLine.trim().split(/\s+/);
@@ -2660,7 +2613,6 @@ Enter password to access the system console:
                     }
                     const targetInput = args.slice(1).join(' ').trim().toUpperCase();
                     
-                    // EVERY keyword implementation to display status/history logs of all slots (Formatted in Emerald Green)
                     if (targetInput === 'EVERY') {
                         response = '<span style="color: #10B981; font-weight: bold;">ALL BAYS SYSTEM LOGS:</span><br>';
                         for (const key in busDatabase) {
@@ -2678,7 +2630,6 @@ Enter password to access the system console:
 
                     let foundKey = null;
 
-                    // 1. Check if the input matches any active custom bus names first (Safe fallback checked)
                     for (const key in busDatabase) {
                         const slot = busDatabase[key];
                         if (slot.isParked && (slot.busName || "").toUpperCase() === targetInput) {
@@ -2687,7 +2638,6 @@ Enter password to access the system console:
                         }
                     }
 
-                    // 2. Fall back to matching default slot labels or IDs
                     if (!foundKey) {
                         for (const key in busDatabase) {
                             const slot = busDatabase[key];
@@ -2721,7 +2671,6 @@ Enter password to access the system console:
                                    `No active bay or parked bus matches '${escapeHtml(targetInput)}'.</span><br>`;
                     }
 
-                    // Search historical data for matches
                     const matchedHistory = replacementHistory.filter(h => 
                         h.oldBusName === targetInput || 
                         h.newBusName === targetInput || 
@@ -2742,7 +2691,6 @@ Enter password to access the system console:
                         });
                     }
 
-                    // Combine active status and history logs together
                     response = registryStatus;
                     if (historyStatus) {
                         response += historyStatus;
@@ -2772,13 +2720,11 @@ Enter password to access the system console:
                     clearTerminal();
                     return;
                 default:
-                    // Unrecognized command syntax errors now display in Red (#ef4444)
                     response = `<span style="color: #ef4444;">'${escapeHtml(command)}' is not recognized as an internal or external command.<br>Type 'help' for a list of valid commands.</span><br>`;
             }
             
             terminalOutput.innerHTML += response + '<br>';
             
-            // Auto scroll container down to latest logs
             const termBody = document.querySelector('.terminal-body');
             if (termBody) {
                 termBody.scrollTop = termBody.scrollHeight;
